@@ -24,22 +24,22 @@ public class Speedometer : MonoBehaviour
     }
     private void Update()
     {
-        speedLabel.text = ((int)car.currentSpeed) + " km/h";
+        speedLabel.text = ((int)car.currentKPM) +"";
 
-        if (car.currentRPM > 0)
+        if ((car.gearNum) > 0 || car.currentRPM > 0)
         {
-            statusLabel.text = ((int)car.statusEngine) + "";
+            statusLabel.text = (car.gearNum) + "";
         }
-        else if(car.currentSpeed == 0)
+        else if ((car.gearNum) == 0)
         {
             statusLabel.text = "N";
         }
-        else
+        else if (car.currentRPM < 0)
         {
             statusLabel.text = "R";
         }
 
         arrow.localEulerAngles =
-                new Vector3(0, 0, Mathf.Lerp(minSpeedArrowAngle, maxSpeedArrowAngle, car.currentSpeed / maxSpeed));
+                new Vector3(0, 0, Mathf.Lerp(minSpeedArrowAngle, maxSpeedArrowAngle, car.currentKPM / maxSpeed));
     }
 }

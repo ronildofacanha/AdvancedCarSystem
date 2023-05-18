@@ -34,15 +34,15 @@ public class EngineAudio : MonoBehaviour
         carController = GetComponent<CarController>();
         engineSound.volume = 0;
         lowSound.volume = 0f;
-        maxSpeed = carController.maxSpeed;
+        maxSpeed = carController.maxKPM;
     }
 
     // Update is called once per frame
     void Update()
     {
-        float currentSpeed = carController.currentSpeed;
+        float currentSpeed = carController.currentKPM;
 
-        if (carController.statusEngine == 1)
+        if (carController.gearNum == 1)
         {
             if (!startSound.isPlaying && !carController.isEngineStart)
             {
