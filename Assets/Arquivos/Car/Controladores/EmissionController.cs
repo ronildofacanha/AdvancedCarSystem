@@ -128,27 +128,20 @@ public class EmissionController : MonoBehaviour
                 isDownLights = false;
             }
         }
+    }
 
-        if (Input.GetKeyUp(KeyCode.Alpha4))
+    public void NitrousOn()
+    {
+        foreach (var backFire in backFires)
         {
-        
-            if (isBackFires == false)
-            {
-                foreach (var backFire in backFires)
-                {
-                    OnEmissionParticle(backFire, 1);
-                }
-                isBackFires = true;
-            }
-            else
-            {
-                foreach (var backFire in backFires)
-                {
-                    OnEmissionParticle(backFire, 0);
-                }
-                isBackFires = false;
-            }
-
+            OnEmissionParticle(backFire, 1);
+        }
+    }
+    public void NitrousOff()
+    {
+        foreach (var backFire in backFires)
+        {
+            OnEmissionParticle(backFire, 0);
         }
     }
 }

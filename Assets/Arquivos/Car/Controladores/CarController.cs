@@ -1,16 +1,9 @@
 using System.Collections;
-using System.Collections.Generic;
-using TMPro;
-using Unity.Mathematics;
-using Unity.VisualScripting;
-using UnityEditor.Rendering;
 using UnityEngine;
-using UnityEngine.Experimental.GlobalIllumination;
-
 /*
  * 1� marcha � 40 km/h.
- * 2� marcha � 60 km/h.
- * 3� marcha � 100 km/h.
+ * 2� marcha � 80 km/h.
+ * 3� marcha � 120 km/h.
  * 4� marcha � 160 km/h.
  * 5� marcha � 180 km/h.
  */
@@ -30,38 +23,54 @@ public class CarController : MonoBehaviour
         rearDrive,
         allDrive
     }
-    [Header("Engine")]
+    internal enum GearType
+    {
+        Manual,
+        Auto
+    }
+
+    [Header("TypeMode")]
+    [SerializeField] private DriveType driveType;
+    [SerializeField] private BreakeType breakeType;
+    [SerializeField] private GearType gearType;
+
+    [Header("Acc")]
     public float totalTorque;
     public AnimationCurve enginePower;
     public float wheelsRPM;
     public float engineRPM;
     public float smoothTime;
     public float[] gears;
+    public float[] gearChangeSpeed;
     public int gearNum = 0;
     public float handBrakeFrictionMultiplier = 2f;
 
     [Header("Config Wheels")]
-    [SerializeField] private DriveType driveType;
-    [SerializeField] private BreakeType breakeType;
     public GameObject WM, WC;
     public WheelCollider[] wheels;
     public Transform[] wMeshes;
 
-    [Header("Config Car")]
+    [Header("Controller")]
     public float maxKPM = 180f;
+    public float maxRPM = 5600;
+    public float minRPM = 3000;
     public float brakeTorque = 3000f;
-    public float acceleration = 0.3f;
     public float[] angularDrag;
 
     [Header("Config Drift")]
-    public float addAcceleration = 1.5f;
     public float SDF_F, SDF_R;
     public float FWF_R = 0.1f;
     public float SDF_Default, FWF_Default;
     public float maxDriftAngle = 30, driftForce = 10;
     public float maxStabilizingForce = 200f;
 
-    [Header("Auto")]
+    [Header("NITROUS")]
+    public float nitroForce = 500f;
+    public float nitroDuration = 5f;
+    public float nitroCooldown = 10f;
+    public float currentNitroDuration;
+
+    [Header("FORCES")]
     public GameObject centerOfMass; // Altura do centro de massa do carro
     public float downforce = 10.0f;
     public float AntiRoll = 5000.0f;
@@ -69,20 +78,21 @@ public class CarController : MonoBehaviour
     [Header("Monitore")]
     public float currentKPM = 0f;
     public float currentRPM = 0.0f;
-    public bool isEngineStart = false;
+    public bool isPowerEngine;
     public bool leftWheelsTouchingGround = false;
     public bool rightWheelsTouchingGround = false;
     public bool allWheelsTouchingGround = false;
 
     #region ___PRIVATE GAME___
-    private Rigidbody _car;
-    private InputManager IM;
+    private Rigidbody _RG;
+    private InputManager _IM;
+    private EmissionController _EM;
+    private Speedometer _SP;
     private WheelFrictionCurve _SDF_F, _SDF_R, _FWF_R, _SDF_Default, _FWF_Default;
     private WheelFrictionCurve forwardFriction, sidewaysFriction;
     private float driftFactor;
     private float radius = 6;
-    private float radiusWheelsController = 6f;
-    private float _acceleration = 0.3f;
+    private EngineAudio _EA;
 
     #endregion // END PRIVATE
     #endregion // ALL 
@@ -91,46 +101,50 @@ public class CarController : MonoBehaviour
         GetGameObject();
         StartVariables();
     }
-
-
-    void Update()
+    private void Update()
     {
-        if (Mathf.Abs(IM.vertical) != 0 && gearNum == 0)
+        if (_IM.powerEngine)
         {
-            StartCoroutine(IE_StartEngine());
+            StartCoroutine(IE_PowerEngine());
         }
-
-        Shifter();
     }
     void FixedUpdate()
     {
-        //TwoWheelsDriving();
-
-        if (IM.burnout)
-        {
-            Burnout();
-        }
-        else
-        {
-            Default();
-        }
-
-        if (IM.driftMode)
-        {
-            DriftMode();
-        }
-        if (currentKPM >= maxKPM * 0.3f)
-        {
-            AdjustTraction();
-        }
-        
-        TorqueBrake();
         TouchingGround();
-        KPH_RPM();
-        TorqueTypeForce();
-        SteerVehicle();
-        CalculateEngineTorque();
         AllForces();
+        KPH_RPM();
+        TorqueBrake();
+
+        if (isPowerEngine)
+        {
+            TorqueType();
+            GearTypeShift();
+            SteerVehicle();
+            CalculateEngineTorque();
+            calculateEnginePower();
+            Nitrous();
+
+            if (_IM.burnout)
+            {
+                if (gearType == GearType.Manual)
+                {
+                    Burnout();
+                }
+            }
+            else
+            {
+                Default();
+            }
+
+            if (_IM.driftMode)
+            {
+                DriftMode();
+            }
+            if (currentKPM >= maxKPM * 0.3f)
+            {
+                AdjustTraction();
+            }
+        }
     }
     void StartVariables()
     {
@@ -144,15 +158,18 @@ public class CarController : MonoBehaviour
 
         _FWF_Default = wheels[3].forwardFriction; _FWF_Default.stiffness = FWF_Default;
 
-        _acceleration = acceleration;
-        _car.angularDrag = angularDrag[1];
+        _RG.angularDrag = angularDrag[1];
         gearNum = 0;
+        isPowerEngine = false;
         Default();
     }
     void GetGameObject()
     {
-        _car = GetComponent<Rigidbody>();
-        IM = GetComponent<InputManager>();
+        _RG = GetComponent<Rigidbody>();
+        _IM = GetComponent<InputManager>();
+        _EM = GetComponent<EmissionController>();
+        _SP = GetComponent<Speedometer>();
+        _EA = GetComponent<EngineAudio>();
         // get wheels in this.gameobject
         WC = GameObject.Find("WC");
         WM = GameObject.Find("WM");
@@ -174,14 +191,14 @@ public class CarController : MonoBehaviour
     }
     void AllForces()
     {
-        if (_car != null)
+        if (_RG != null)
         {
             //COM
             centerOfMass = gameObject.transform.Find("COM").gameObject;
-            _car.centerOfMass = centerOfMass.transform.localPosition;
+            _RG.centerOfMass = centerOfMass.transform.localPosition;
 
             //DOWNFORCE
-            _car.AddForce(-transform.up * downforce * _car.velocity.magnitude);
+            _RG.AddForce(-transform.up * downforce * _RG.velocity.magnitude);
 
             // ANT-ROLL
             WheelHit hit;
@@ -203,18 +220,53 @@ public class CarController : MonoBehaviour
             float antiRollForce = (travelL - travelR) * AntiRoll;
 
             if (groundedL)
-                _car.AddForceAtPosition(wheels[0].transform.up * -antiRollForce, wheels[0].transform.position);
+                _RG.AddForceAtPosition(wheels[0].transform.up * -antiRollForce, wheels[0].transform.position);
 
             if (groundedR)
-                _car.AddForceAtPosition(wheels[1].transform.up * antiRollForce, wheels[1].transform.position);
+                _RG.AddForceAtPosition(wheels[1].transform.up * antiRollForce, wheels[1].transform.position);
         }
     }
     void CalculateEngineTorque()
     {
         wheelRPM();
-        totalTorque = enginePower.Evaluate(engineRPM) * ((gears[gearNum]) * acceleration) * IM.vertical;
+        totalTorque = enginePower.Evaluate(engineRPM) * (gears[gearNum]) * _IM.vertical;
+        totalTorque = totalTorque * 0.32f;
         float velocity = 0.0f;
         engineRPM = Mathf.SmoothDamp(engineRPM, 1000 + (Mathf.Abs(wheelsRPM) * 3.6f * (gears[gearNum])), ref velocity, smoothTime);
+    }
+    float vertical, totalPower,lastValue;
+    private bool flag = false;
+    [HideInInspector] public bool test; //engine sound boolean
+    private void calculateEnginePower()
+    {
+        lastValue = engineRPM;
+
+        wheelRPM();
+
+        if (vertical != 0)
+        {
+            _RG.drag = 0.005f;
+        }
+        if (vertical == 0)
+        {
+            _RG.drag = 0.1f;
+        }
+        totalPower = 3.6f * enginePower.Evaluate(engineRPM) * (vertical);
+
+        float velocity = 0.0f;
+        if (engineRPM >= maxRPM || flag)
+        {
+            engineRPM = Mathf.SmoothDamp(engineRPM, maxRPM - 500, ref velocity, 0.05f);
+
+            flag = (engineRPM >= maxRPM - 450) ? true : false;
+            test = (lastValue > engineRPM) ? true : false;
+        }
+        else
+        {
+            engineRPM = Mathf.SmoothDamp(engineRPM, 1000 + (Mathf.Abs(wheelsRPM) * 3.6f * (gears[gearNum])), ref velocity, smoothTime);
+            test = false;
+        }
+        if (engineRPM >= maxRPM + 1000) engineRPM = maxRPM + 1000; // clamp at max
     }
     void wheelRPM()
     {
@@ -241,10 +293,9 @@ public class CarController : MonoBehaviour
     }
     void DriftMode()
     {
-        if (currentKPM < 20 && IM.horizontal!=0)
+        if (currentKPM < 20 && _IM.horizontal != 0)
         {
-            acceleration = addAcceleration;
-            _car.angularDrag = angularDrag[0];
+            _RG.angularDrag = angularDrag[0];
         }
         // sidewaysFriction                 |      forwardFriction
         wheels[0].sidewaysFriction = _SDF_F; wheels[0].forwardFriction = _SDF_F;
@@ -255,12 +306,11 @@ public class CarController : MonoBehaviour
         // Torque
         wheels[0].brakeTorque = 0;
         wheels[1].brakeTorque = 0;
-        wheels[2].brakeTorque = brakeTorque*0.2f;
-        wheels[3].brakeTorque = brakeTorque*0.2f;
+        wheels[2].brakeTorque = brakeTorque * 0.2f;
+        wheels[3].brakeTorque = brakeTorque * 0.2f;
     }
     void Default()
     {
-
         // //SDF_Default
         wheels[0].sidewaysFriction = _SDF_Default;
         wheels[1].sidewaysFriction = _SDF_Default;
@@ -277,21 +327,20 @@ public class CarController : MonoBehaviour
         wheels[2].brakeTorque = 0f;
         wheels[3].brakeTorque = 0f;
         // AC Default
-        acceleration = _acceleration;
-        _car.angularDrag = angularDrag[0];
+        _RG.angularDrag = angularDrag[0];
     }
     void SteerVehicle()
     {
-        if (IM.horizontal > 0)
+        if (_IM.horizontal > 0)
         {
             //rear tracks size is set to 1.5f       wheel base has been set to 2.55f
-            wheels[0].steerAngle = Mathf.Rad2Deg * Mathf.Atan(2.55f / (radius + (1.5f / 2))) * IM.horizontal;
-            wheels[1].steerAngle = Mathf.Rad2Deg * Mathf.Atan(2.55f / (radius - (1.5f / 2))) * IM.horizontal;
+            wheels[0].steerAngle = Mathf.Rad2Deg * Mathf.Atan(2.55f / (radius + (1.5f / 2))) * _IM.horizontal;
+            wheels[1].steerAngle = Mathf.Rad2Deg * Mathf.Atan(2.55f / (radius - (1.5f / 2))) * _IM.horizontal;
         }
-        else if (IM.horizontal < 0)
+        else if (_IM.horizontal < 0)
         {
-            wheels[0].steerAngle = Mathf.Rad2Deg * Mathf.Atan(2.55f / (radius - (1.5f / 2))) * IM.horizontal;
-            wheels[1].steerAngle = Mathf.Rad2Deg * Mathf.Atan(2.55f / (radius + (1.5f / 2))) * IM.horizontal;
+            wheels[0].steerAngle = Mathf.Rad2Deg * Mathf.Atan(2.55f / (radius - (1.5f / 2))) * _IM.horizontal;
+            wheels[1].steerAngle = Mathf.Rad2Deg * Mathf.Atan(2.55f / (radius + (1.5f / 2))) * _IM.horizontal;
             //transform.Rotate(Vector3.up * steerHelping);
 
         }
@@ -318,14 +367,14 @@ public class CarController : MonoBehaviour
     }
     void TorqueBrake()
     {
-        if (IM.handbrake && !IM.driftMode && !IM.burnout && ((int)currentKPM) != 0)
+        if (_IM.handbrake && !_IM.driftMode && !_IM.burnout && ((int)currentKPM) != 0)
         {
             BrakeStart(1);
         }
 
-        if (IM.vertical == 0 && !IM.burnout && ((int)currentKPM) != 0)
+        if (_IM.vertical == 0 && !_IM.burnout && ((int)currentKPM) != 0)
         {
-            BrakeStart(0.3f); //30% 
+            BrakeStart(0.2f); //20% 
         }
     }
     void AdjustTraction()
@@ -333,7 +382,7 @@ public class CarController : MonoBehaviour
         //tine it takes to go from normal drive to drift 
         float driftSmothFactor = .7f * Time.deltaTime;
 
-        if (IM.handbrake)
+        if (_IM.handbrake)
         {
             sidewaysFriction = wheels[0].sidewaysFriction;
             forwardFriction = wheels[0].forwardFriction;
@@ -382,21 +431,61 @@ public class CarController : MonoBehaviour
 
             wheels[i].GetGroundHit(out wheelHit);
 
-            if (wheelHit.sidewaysSlip < 0) driftFactor = (1 + -IM.horizontal) * Mathf.Abs(wheelHit.sidewaysSlip);
+            if (wheelHit.sidewaysSlip < 0) driftFactor = (1 + -_IM.horizontal) * Mathf.Abs(wheelHit.sidewaysSlip);
 
-            if (wheelHit.sidewaysSlip > 0) driftFactor = (1 + IM.horizontal) * Mathf.Abs(wheelHit.sidewaysSlip);
+            if (wheelHit.sidewaysSlip > 0) driftFactor = (1 + _IM.horizontal) * Mathf.Abs(wheelHit.sidewaysSlip);
         }
 
     }
-    void Shifter()
+    bool checkGears()
     {
-        if (Input.GetKeyUp(KeyCode.E) && gearNum >= 0)
+        if (currentKPM >= gearChangeSpeed[gearNum]) return true;
+        else return false;
+    }
+    void GearTypeShift()
+    {
+        if (gearType == GearType.Manual)
         {
-            gearNum += 1;
+            if (Input.GetKeyUp(KeyCode.E) && gearNum >= 0 && currentRPM >= 0 && gearNum < gears.Length-1)
+            {
+                gearNum += 1;
+                _SP.UpdateGear();
+            }
+            else if (Input.GetKeyUp(KeyCode.Q) && gearNum > 0)
+            {
+                gearNum -= 1;
+                _SP.UpdateGear();
+            }
+            return;
         }
-        else if (Input.GetKeyUp(KeyCode.Q) && gearNum >= 0)
+        else
         {
-            gearNum -= 1;
+            if (engineRPM > minRPM && gearNum < gears.Length - 1 && gearNum >= 0 && currentRPM >= 0 && checkGears())
+            {
+                gearNum++;
+                _SP.UpdateGear();
+                return;
+            }
+            else if (engineRPM < minRPM && gearNum > 0)
+            {
+                if (gearNum>1)
+                {
+                    gearNum--;
+                }
+                else if (currentKPM ==0)
+                {
+                    gearNum = 0;
+                }
+                _SP.UpdateGear();
+                return;
+            }
+
+            if (_IM.vertical != 0 && gearNum == 0)
+            {
+                gearNum = 1;
+                _SP.UpdateGear();
+                return;
+            }
         }
     }
     void BrakeStart(float force) // force = 0.5f | 50%
@@ -433,9 +522,9 @@ public class CarController : MonoBehaviour
         wheels[2].brakeTorque = 0;
         wheels[3].brakeTorque = 0;
     }
-    void TorqueTypeForce()
+    void TorqueType()
     {
-        if (currentKPM < maxKPM && currentKPM > -maxKPM && gearNum != 0)
+        if (currentKPM < maxKPM && currentKPM > -maxKPM)
         {
             if (driveType == DriveType.allDrive)
             {
@@ -459,7 +548,7 @@ public class CarController : MonoBehaviour
     void KPH_RPM()
     {
         // km/h
-        currentKPM = _car.velocity.magnitude * 3.6f;
+        currentKPM = _RG.velocity.magnitude * 3.6f;
         currentKPM = ((int)currentKPM);
         // RPM
         currentRPM = 2 * Mathf.PI * wheels[0].radius * wheels[0].rpm * 60 / 1000;
@@ -468,8 +557,16 @@ public class CarController : MonoBehaviour
         if (currentKPM > maxKPM)
         {
             float maxSpeedMS = maxKPM / 3.6f;
-            _car.velocity = _car.velocity.normalized * maxSpeedMS;
+            _RG.velocity = _RG.velocity.normalized * maxSpeedMS;
         }
+    }
+    void Burnout()
+    {
+        wheels[2].forwardFriction = _FWF_R;
+        wheels[3].forwardFriction = _FWF_R;
+
+        wheels[0].brakeTorque = brakeTorque;
+        wheels[1].brakeTorque = brakeTorque;
     }
     void UpdateWheel(WheelCollider coll, Transform mesh)
     {
@@ -479,28 +576,58 @@ public class CarController : MonoBehaviour
         mesh.transform.position = pos;
         mesh.transform.rotation = quat;
     }
-
-    public float tiltForce = 1000;
-
-    private void TwoWheelsDriving()
+    void Nitrous()
     {
-        // Apply tilt force to simulate lifting onto two wheels
-        float tiltAngle = transform.eulerAngles.z;
-        float tiltForceMagnitude = Mathf.Abs(tiltAngle) > 90f ? tiltForce : 0f;
-        Vector3 tiltForceVector = transform.up * tiltForceMagnitude;
-        _car.AddForce(tiltForceVector, ForceMode.Force);
+        if (!_IM.nitrous && currentNitroDuration <= nitroDuration)
+        {
+            currentNitroDuration += Time.deltaTime/2;
+        }
+        else if(currentNitroDuration > 0 && _IM.nitrous)
+        {
+            currentNitroDuration -= Time.deltaTime;
+        }
+
+        if (_IM.nitrous)
+        {
+            if (currentNitroDuration > 0)
+            {
+                _EM.NitrousOn();
+                _RG.AddForce(transform.forward * nitroForce);
+            }
+            else
+            {
+                _EM.NitrousOff();
+            }
+        }
+        else
+        {
+            _EM.NitrousOff();
+        }
     }
-    IEnumerator IE_StartEngine()
+   /* private void CalculateRevs()
+    {
+        float revs = _Car.engineRPM / _Car.maxRPM;
+    }
+   */
+    IEnumerator IE_PowerEngine()
     {
         BrakeStart(1);
         yield return new WaitForSeconds(0.5f);
-        if (!isEngineStart)
+        if (!isPowerEngine)
         {
-            gearNum = 1;
-            isEngineStart = true;
-            print("Ligado");
+            isPowerEngine = true;
+            print("Ligado!");
+            _SP.UpdateGear();
+            _EA.OnEngine();
+            yield return null;
         }
-
+        else
+        {
+            isPowerEngine = false;
+            print("Desligado!");
+            _SP.UpdateGear();
+            _EA.OffEngine();
+        }
         yield return new WaitForSeconds(0.5f);
         BrakePause();
     }
@@ -520,20 +647,10 @@ public class CarController : MonoBehaviour
             }
             else
             {
-                Vector3 currentRotation = _car.transform.rotation.eulerAngles;
-                _car.transform.rotation = Quaternion.Euler(currentRotation.x, currentRotation.y, 0f);
+                Vector3 currentRotation = _RG.transform.rotation.eulerAngles;
+                _RG.transform.rotation = Quaternion.Euler(currentRotation.x, currentRotation.y, 0f);
                 print("CAPOTOU");
             }
         }
-    }
-    void Burnout()
-    {
-        acceleration = addAcceleration;
-
-        wheels[2].forwardFriction = _FWF_R;
-        wheels[3].forwardFriction = _FWF_R;
-
-        wheels[0].brakeTorque = brakeTorque;
-        wheels[1].brakeTorque = brakeTorque;
     }
 }
