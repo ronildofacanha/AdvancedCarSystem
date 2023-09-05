@@ -98,7 +98,7 @@ public class CarController : MonoBehaviour
     #endregion // ALL 
     void Start()
     {
-        GetGameObject();
+        GetGameObjects();
         StartVariables();
     }
     private void Update()
@@ -111,7 +111,7 @@ public class CarController : MonoBehaviour
     void FixedUpdate()
     {
         TouchingGround();
-        AllForces();
+        AllPhysics();
         KPH_RPM();
         TorqueBrake();
 
@@ -133,7 +133,7 @@ public class CarController : MonoBehaviour
             }
             else
             {
-                Default();
+                DefaultFriction();
             }
 
             if (_IM.driftMode)
@@ -161,9 +161,9 @@ public class CarController : MonoBehaviour
         _RG.angularDrag = angularDrag[1];
         gearNum = 0;
         isPowerEngine = false;
-        Default();
+        DefaultFriction();
     }
-    void GetGameObject()
+    void GetGameObjects()
     {
         _RG = GetComponent<Rigidbody>();
         _IM = GetComponent<InputManager>();
@@ -189,7 +189,7 @@ public class CarController : MonoBehaviour
         wheels[3] = WC.transform.Find("RearRightWheel").gameObject.GetComponent<WheelCollider>();
         wMeshes[3] = WM.transform.Find("RearRightWheel").gameObject.GetComponent<Transform>();
     }
-    void AllForces()
+    void AllPhysics()
     {
         if (_RG != null)
         {
@@ -234,6 +234,7 @@ public class CarController : MonoBehaviour
         float velocity = 0.0f;
         engineRPM = Mathf.SmoothDamp(engineRPM, 1000 + (Mathf.Abs(wheelsRPM) * 3.6f * (gears[gearNum])), ref velocity, smoothTime);
     }
+
     float vertical, totalPower,lastValue;
     private bool flag = false;
     [HideInInspector] public bool test; //engine sound boolean
@@ -281,7 +282,6 @@ public class CarController : MonoBehaviour
     }
     void TouchingGround()
     {
-
         leftWheelsTouchingGround = wheels[0].isGrounded || wheels[2].isGrounded;
         rightWheelsTouchingGround = wheels[1].isGrounded || wheels[3].isGrounded;
         allWheelsTouchingGround = wheels[0].isGrounded || wheels[2].isGrounded || wheels[1].isGrounded || wheels[3].isGrounded;
@@ -309,7 +309,7 @@ public class CarController : MonoBehaviour
         wheels[2].brakeTorque = brakeTorque * 0.2f;
         wheels[3].brakeTorque = brakeTorque * 0.2f;
     }
-    void Default()
+    void DefaultFriction()
     {
         // //SDF_Default
         wheels[0].sidewaysFriction = _SDF_Default;
@@ -326,7 +326,7 @@ public class CarController : MonoBehaviour
         wheels[1].brakeTorque = 0f;
         wheels[2].brakeTorque = 0f;
         wheels[3].brakeTorque = 0f;
-        // AC Default
+        // AC DefaultFriction
         _RG.angularDrag = angularDrag[0];
     }
     void SteerVehicle()
@@ -446,19 +446,20 @@ public class CarController : MonoBehaviour
     {
         if (gearType == GearType.Manual)
         {
-            if (Input.GetKeyUp(KeyCode.E) && gearNum >= 0 && currentRPM >= 0 && gearNum < gears.Length-1)
+            if (Input.GetKeyUp(KeyCode.E))
             {
-                gearNum += 1;
+                gearNum = 1;
                 _SP.UpdateGear();
+                return;
             }
-            else if (Input.GetKeyUp(KeyCode.Q) && gearNum > 0)
+            else if (Input.GetKeyUp(KeyCode.Q))
             {
-                gearNum -= 1;
+                gearNum = 0;
                 _SP.UpdateGear();
+                return;
             }
-            return;
         }
-        else
+        else if (gearType == GearType.Auto)
         {
             if (engineRPM > minRPM && gearNum < gears.Length - 1 && gearNum >= 0 && currentRPM >= 0 && checkGears())
             {

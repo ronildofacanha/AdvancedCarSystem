@@ -8,6 +8,9 @@ public class WheelTrail : MonoBehaviour
     public ParticleSystem smokeParticlesPrefab;
     public float valueMinOfEmission = 0.1f; // Valor limite para considerar que o carro está derrapando
 
+    [Header("Particle")]
+    public bool enableFX = true;
+
     [Header("Skid Source")]
     public AudioSource slipSource;
 
@@ -27,74 +30,80 @@ public class WheelTrail : MonoBehaviour
  
     void EmissionTrailsForwardSlip()
     {
-        WheelHit hit;
-        wheelCollider.GetGroundHit(out hit);
-
-        // Verifica se o pneu está tocando o chão
-        if (wheelCollider.isGrounded && Mathf.Abs(hit.forwardSlip) > valueMinOfEmission)
+        if (enableFX)
         {
-            // Obter posição e rotação do pneu
-            Vector3 position;
-            Quaternion rotation;
-            wheelCollider.GetWorldPose(out position, out rotation);
+            WheelHit hit;
+            wheelCollider.GetGroundHit(out hit);
 
-            // Calcula a posição embaixo da roda
-            float wheelHeight = wheelCollider.radius * 2f;
-            Vector3 trailPosition = position - transform.up * (wheelHeight / 2f);
+            // Verifica se o pneu está tocando o chão
+            if (wheelCollider.isGrounded && Mathf.Abs(hit.forwardSlip) > valueMinOfEmission)
+            {
+                // Obter posição e rotação do pneu
+                Vector3 position;
+                Quaternion rotation;
+                wheelCollider.GetWorldPose(out position, out rotation);
 
-            // Atualiza a posição e a rotação do trail renderer
-            trailRenderer.transform.position = trailPosition += transform.up * 0.1f;
-            trailRenderer.transform.rotation = rotation;
+                // Calcula a posição embaixo da roda
+                float wheelHeight = wheelCollider.radius * 2f;
+                Vector3 trailPosition = position - transform.up * (wheelHeight / 2f);
 
-            // Ativa o trail renderer
-            trailRenderer.emitting = true;
+                // Atualiza a posição e a rotação do trail renderer
+                trailRenderer.transform.position = trailPosition += transform.up * 0.1f;
+                trailRenderer.transform.rotation = rotation;
 
-            //SMOKE
-            smokeParticles.transform.position = transform.position;
-            smokeEmission.enabled = true;
-        }
-        else
-        {
-            // Desativa o trail renderer
-            trailRenderer.emitting = false;
-            smokeEmission.enabled = false;
+                // Ativa o trail renderer
+                trailRenderer.emitting = true;
+
+                //SMOKE
+                smokeParticles.transform.position = transform.position;
+                smokeEmission.enabled = true;
+            }
+            else
+            {
+                // Desativa o trail renderer
+                trailRenderer.emitting = false;
+                smokeEmission.enabled = false;
+            }
         }
     }
 
     void EmissionTrailsSidewaysSlip()
     {
-        WheelHit hit;
-        wheelCollider.GetGroundHit(out hit);
-
-        if (wheelCollider.isGrounded && Mathf.Abs(hit.forwardSlip) > valueMinOfEmission)
+        if (enableFX)
         {
-            // Obter posição e rotação do pneu
-            Vector3 position;
-            Quaternion rotation;
-            wheelCollider.GetWorldPose(out position, out rotation);
+            WheelHit hit;
+            wheelCollider.GetGroundHit(out hit);
 
-            // Calcula a posição embaixo da roda
-            float wheelHeight = wheelCollider.radius * 2f;
-            Vector3 posWheels = position - transform.up * (wheelHeight / 2f);
+            if (wheelCollider.isGrounded && Mathf.Abs(hit.forwardSlip) > valueMinOfEmission)
+            {
+                // Obter posição e rotação do pneu
+                Vector3 position;
+                Quaternion rotation;
+                wheelCollider.GetWorldPose(out position, out rotation);
 
-            // Atualiza a posição e a rotação do trail renderer
-            trailRenderer.transform.position = posWheels += transform.up * 0.01f;
-            trailRenderer.transform.rotation = rotation;
+                // Calcula a posição embaixo da roda
+                float wheelHeight = wheelCollider.radius * 2f;
+                Vector3 posWheels = position - transform.up * (wheelHeight / 2f);
 
-            // Ativa o trail renderer
-            trailRenderer.emitting = true;
+                // Atualiza a posição e a rotação do trail renderer
+                trailRenderer.transform.position = posWheels += transform.up * 0.01f;
+                trailRenderer.transform.rotation = rotation;
 
-            //SMOKE
-            smokeParticles.transform.position = position;
-            smokeEmission.enabled = true;
-            StartPlay();
-        }
-        else
-        {
-            // Desativa o trail renderer
-            trailRenderer.emitting = false;
-            smokeEmission.enabled = false;
-            StopPlay();
+                // Ativa o trail renderer
+                trailRenderer.emitting = true;
+
+                //SMOKE
+                smokeParticles.transform.position = position;
+                smokeEmission.enabled = true;
+                StartPlay();
+            }
+            else
+            {
+                // Desativa o trail renderer
+                trailRenderer.emitting = false;
+                smokeEmission.enabled = false;
+                StopPlay();
+            }
         }
     }
 
