@@ -1,6 +1,4 @@
-Certainly! Below is a simplified description for an advanced car system implemented in Unity:
-
----
+Advanced car system implemented in Unity:
 
 Welcome to our Advanced Car System in Unity – a powerful solution for creating realistic and dynamic driving experiences in your games or simulations.
 
