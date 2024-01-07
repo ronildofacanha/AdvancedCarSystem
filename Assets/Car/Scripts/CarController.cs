@@ -605,11 +605,7 @@ public class CarController : MonoBehaviour
             _EM.NitrousOff();
         }
     }
-   /* private void CalculateRevs()
-    {
-        float revs = _Car.engineRPM / _Car.maxRPM;
-    }
-   */
+
     IEnumerator IE_PowerEngine()
     {
         BrakeStart(1);

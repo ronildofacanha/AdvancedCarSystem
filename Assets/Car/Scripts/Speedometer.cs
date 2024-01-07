@@ -16,12 +16,11 @@ public class Speedometer : MonoBehaviour
     public RectTransform arrow; // The arrow in the speedometer
     public Image nitrus;
 
-    private CarController car;
+    public CarController car;
     private float initFillAmount;
 
     private void Start()
     {
-        car = GetComponent<CarController>();
         initFillAmount = nitrus.fillAmount;
         statusLabel.text = "N";
     }
@@ -42,7 +41,7 @@ public class Speedometer : MonoBehaviour
     }
     public void UpdateGear()
     {
-        if (car.gearNum == 0)
+        if (car.gearNum == 0 && car != null)
         {
             statusLabel.text = "N";
             return;
