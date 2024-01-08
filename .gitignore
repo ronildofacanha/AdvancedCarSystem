@@ -63,3 +63,5 @@ crashlytics-build.properties
 
 # Ignorar a pasta UserSettings
 UserSettings/
+Packages/
+ProjectSettings/
