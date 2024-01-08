@@ -1,4 +1,11 @@
-Advanced car system implemented in Unity:
+
+<h1 align="center">
+<br>
+  <img src= "https://i.ytimg.com/vi/KQNQhXzxTr8/maxresdefault.jpg" alt="Advanced car" width="120">
+<br>
+<br>
+Advanced car system implemented in Unity
+</h1>
 
 Welcome to our Advanced Car System in Unity – a powerful solution for creating realistic and dynamic driving experiences in your games or simulations.
 
